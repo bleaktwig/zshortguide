@@ -1,0 +1,10 @@
+# Ignore all
+*
+
+# Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
+# Based on this wonderful answer: https://stackoverflow.com/questions/5711120/gitignore-without-binary-files
