@@ -1,8 +1,11 @@
 # ZMQ
-> first, run `man zmq` for a general introduction.
+> first, run `man zmq` to be formally introduced to our friendly ZMQ.
+
 ---
 # Preliminary Notes
 * Unlike common applications, a "socket" does not represents a connection to another node, but a socket can be used to communicate with many nodes. The same applies for a "thread".
+* As far as I've seen, all ZMQ functions have a verbose and well-written `man` page. Try that before asking the internet, you might be surprised by the results.
+* Compilation is pretty straightforward: `gcc -Wall -g FILENAME.c -lzmq -o FILENAME`. `-lzmq` links the ZMQ bindings and `-Wall` and `-g` are what you should be using anyway.
 
 ---
 # Context
@@ -24,7 +27,7 @@ ZMQ sockets live in four parts:
 * Plugging them into a network topology by creating ZMQ connections with `zmq_bind()` and `zmq_connect()`.
 * Writing and receiving messages on them with `zmq_msg_send()` and `zmq_msg_recv()`.
 
-Sockets are always void pointers and messages are structures. Therefore, "all your sockets are belong to ZMQ", but messages are things that we own in our code. Sockets can be created, destroyed and configured.
+Sockets are always void pointers and messages are structures. Therefore, **all your sockets are belong to ZMQ**, but messages are things that you own in our code. Sockets can only be created, destroyed and configured.
 
 ### Plugging Sockets into the Topology
 * A server does `zmq_bind()` on a well-known address, becoming an endpoint bound to a socket. When a socket is bound to an endpoint, **it automatically starts accepting connections**.
@@ -92,10 +95,10 @@ For a connect-bind pair, these are the valid socket combinations:
 Combinations not listed here will produce undocumented and unreliable results, commonly returning errors.
 
 ### High-Level Messaging Patterns
-On top of the four mentioned patterns, *high-level patterns* exist for that extra spice. These are not part of the core library and do not come with the ZMQ package, but rather exist in their own space of the ZMQ community.
+On top of the four mentioned patterns, *high-level patterns* exist for that extra :fire:spice:fire:. These are not part of the core library and do not come with the ZMQ package, but rather exist in their own space of the ZMQ community.
 
 ### Working with Messages
-ZMQ messages are blobs of any size from 0 upwards, as long as they fit in memory. ZMQ doesn't touch serialization, so we need to do it ourselves (with profobufs, msgpack, JSON, etc).
+ZMQ messages are blobs of any size from 0 upwards, as long as they fit in memory. ZMQ doesn't touch serialization, so you need to do it yourself (no excuses - use profobufs, msgpack, JSON, etc).
 
 A ZMQ message is a `zmq_msg_t` structure:
 
@@ -104,7 +107,7 @@ A ZMQ message is a `zmq_msg_t` structure:
 * to write a message, `zmq_msg_init_size()` is used to create a message and allocate a block of data of some size, which is then filled using `memcpy()` and sent with `zmq_msg_send()`.
 * A message is released with `zmq_msg_close()`, which drops the reference. ZMQ will eventually destroy it.
 * `zmq_msg_data()` is used to access the message content, and it's size is checked with `zmq_msg_size()`.
-* `zmq_msg_move()`, `zmq_msg_copy()` and `zmq_msg_init_data()` are strictly forbidden unless we read the manual pages and know precisely why we need them. `zmq_msg_init_data()` is **extremely** forbidden, do not worry about shaving microseconds yet.
+* `zmq_msg_move()`, `zmq_msg_copy()` and `zmq_msg_init_data()` are strictly forbidden unless we read the manual pages and know precisely why we need them. `zmq_msg_init_data()` is **extremely** forbidden, you don't need to worry about shaving microseconds.
 
 After sending a message, ZMQ will clear it and its data cannot be accessed. If we want to send a message more than once, we need to create a second one, initialize it with `zmq_msg_init()` and use `zmq_msg_copy()` to create a copy of the first one (this does not copy the data, only the reference). This new message can then be sent, and ZMQ will clear the contents only after all copies have been sent.
 
@@ -112,19 +115,19 @@ Messages are composed of frames or "message parts", which are a length-specified
 
 Some other stuffs are worth knowing about messages:
 
-* We may send zero-length messages, e.g: for signaling.
+* You may send zero-length messages, e.g: for signaling.
 * ZMQ guaranties that either all parts of a message will be delivered or none of them will.
 * A message is not sent right away, so it must fit in memory, single or multipart.
-* If we want to send a file, it's useful to break it up into pieces first, sending each piece as a separate single-part message.
-* When finished with a message, we **always** need to call `zmq_msg_close()`.
+* If you want to send a file, it's useful to break it up into pieces first, sending each piece as a separate single-part message.
+* When finished with a message, you **always** need to call `zmq_msg_close()`.
 
 ---
 # Additional Information
 ### Cleaning up after the Job
-Just as we avoid a memory leak or a messy murder, it's **very** important to clean up after finishing the job; mainly for security concerns. The ZMQ objects we need to worry about are messages, sockets and contexts:
+Just as you want to avoid a memory leak or a messy murder scene, it is **very** important to clean up after finishing the job; mainly for security concerns. The ZMQ objects you need to worry about are messages, sockets and contexts:
 
-* Always close a message once we're done with it with `zmq_msg_close()`.
-* If we are opening a ton of sockets, that's probably a sign that you need to redesign your application, and correctly setting the `LINGER` value should be a priority.
+* Always close a message once you're done with it with `zmq_msg_close()`.
+* If you are opening a ton of sockets, that's probably a sign that you need to redesign your application, and correctly setting the `LINGER` value should be a priority.
 * Before a program exits, all sockets should be closed and `zmq_ctx_destroy()` should be called.
 
 Exiting multithreaded applications is way more complicated and they should only be used when strictly necessary, since ZMQ handles stuff concurrently by itself (the ZMQ sockets act like little concurrent servers).
