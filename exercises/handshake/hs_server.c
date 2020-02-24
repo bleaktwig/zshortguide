@@ -7,32 +7,66 @@
 
 int main(void) {
     void *ctx = zmq_ctx_new();
-    void *rep = zmq_socket(ctx, ZMQ_REP);
-    int rc = zmq_bind(rep, "tcp://*:5555");
-    assert(rc == 0);
-
-    zmq_msg_t msg;
-    rc = zmq_msg_init(&msg);
-    assert(rc == 0);
-
-    // Block until a handshake is received.
-    printf("Waiting for a client to give me a handshake...\n");
-    rc = zmq_msg_recv(&msg, rep, 0);
-    if (rc == -1) { // Failed to receive a message, print error and exit.
-        fprintf(stderr, "Error receiving message. errno: %s\n", strerror(errno));
+    void *s_rep = zmq_socket(ctx, ZMQ_REP);
+    if (zmq_bind(s_rep, "tcp://*:5555") == -1) {
+        fprintf(stderr, "Error binding socket. errno: %s\n", strerror(errno));
         exit(1);
     }
 
-    // Process the message and assert that it's a handshake.
-    size_t msg_size = zmq_msg_size(&msg);
-    if (msg_size == 0) printf("Handshake received. Exiting...\n");
-    else printf("The message received isn't a handshake. I'm sad now.\n");
+    printf("Server initiated. Waiting for messages...\n");
+    while(1) {
+        int exit_signal = 0;
 
-    // Release message.
-    zmq_msg_close(&msg);
+        zmq_msg_t req;
+        if (zmq_msg_init(&req) == -1) {
+            fprintf(stderr, "Error initiating request message. errno: %s\n", strerror(errno));
+            exit(1);
+        }
 
-    // Closing up...
-    zmq_close(rep);
+        // Block until a handshake is received.
+        if (zmq_msg_recv(&req, s_rep, 0) == -1) {
+            fprintf(stderr, "Error receiving message. errno: %s\n", strerror(errno));
+            exit(1);
+        }
+
+        // Save and release message.
+        char* req_buffer = (char*) malloc(zmq_msg_size(&req) + 1);
+        memcpy(req_buffer, zmq_msg_data(&req), zmq_msg_size(&req));
+        req_buffer[zmq_msg_size(&req)] = '\0';
+        zmq_msg_close(&req);
+
+        // Print the message.
+        printf("received message: %s\n", req_buffer);
+        if (strncmp(req_buffer, "exit", sizeof(*req_buffer)) == 0) {
+            printf("Someone is telling me to exit!\n");
+            exit_signal = 1;
+        }
+
+        free(req_buffer);
+
+        // Answer the handshake appropiately.
+        char* msg = "back handshake";
+        zmq_msg_t res;
+        if (zmq_msg_init_size(&res, strlen(msg)) == -1) {
+            fprintf(stderr, "Error initiating response message. errno: %s\n", strerror(errno));
+            exit(1);
+        }
+        memcpy(zmq_msg_data(&res), msg, strlen(msg));
+
+        if (zmq_msg_send(&res, s_rep, 0) == -1) {
+            // Failed to send message, print error and exit.
+            fprintf(stderr, "Error sending message. errno: %s\n", strerror(errno));
+            exit(1);
+        }
+
+        // Release message.
+        zmq_msg_close(&res);
+
+        if (exit_signal != 0) break;
+    }
+
+    // Cleaning up...
+    zmq_close(s_rep);
     zmq_ctx_destroy(ctx);
     return 0;
 }

@@ -5,7 +5,7 @@
 # Preliminary Notes
 * Unlike common applications, a "socket" does not represents a connection to another node, but a socket can be used to communicate with many nodes. The same applies for a "thread".
 * As far as I've seen, all ZMQ functions have a verbose and well-written `man` page. Try that before asking the internet, you might be surprised by the results.
-* Compilation is pretty straightforward: `gcc -Wall -g FILENAME.c -lzmq -o FILENAME`. `-lzmq` links the ZMQ bindings and `-Wall` and `-g` are what you should be using anyway.
+* Compilation is pretty straightforward: `gcc -Wall -g FILENAME.c -lzmq -o FILENAME`. `-lzmq` links the ZMQ bindings, while `-Wall` and `-g` are what you should be using anyway.
 
 ---
 # Context
@@ -107,7 +107,7 @@ A ZMQ message is a `zmq_msg_t` structure:
 * to write a message, `zmq_msg_init_size()` is used to create a message and allocate a block of data of some size, which is then filled using `memcpy()` and sent with `zmq_msg_send()`.
 * A message is released with `zmq_msg_close()`, which drops the reference. ZMQ will eventually destroy it.
 * `zmq_msg_data()` is used to access the message content, and it's size is checked with `zmq_msg_size()`.
-* `zmq_msg_move()`, `zmq_msg_copy()` and `zmq_msg_init_data()` are strictly forbidden unless we read the manual pages and know precisely why we need them. `zmq_msg_init_data()` is **extremely** forbidden, you don't need to worry about shaving microseconds.
+* `zmq_msg_move()`, `zmq_msg_copy()` and `zmq_msg_init_data()` are strictly forbidden unless we read the manual pages and know precisely **why** we need them. `zmq_msg_init_data()` is **extremely** forbidden, unless you **need** to worry about shaving microseconds.
 
 After sending a message, ZMQ will clear it and its data cannot be accessed. If we want to send a message more than once, we need to create a second one, initialize it with `zmq_msg_init()` and use `zmq_msg_copy()` to create a copy of the first one (this does not copy the data, only the reference). This new message can then be sent, and ZMQ will clear the contents only after all copies have been sent.
 
