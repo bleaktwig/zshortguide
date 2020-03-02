@@ -6,6 +6,7 @@
 * Unlike common applications, a "socket" does not represents a connection to another node, but a socket can be used to communicate with many nodes. The same applies for a "thread".
 * As far as I've seen, all ZMQ functions have a verbose and well-written `man` page. Try that before asking the internet, you might be surprised by the results.
 * Compilation is pretty straightforward: `gcc -Wall -g FILENAME.c -lzmq -o FILENAME`. `-lzmq` links the ZMQ bindings, while `-Wall` and `-g` are what you should be using anyway.
+* All the examples in the `examples` directory come from [**zguide**](https://github.com/booksbyus/zguide) and thus are licensed under the Creative Commons Attribution-Non-Commercial-Share Alike 3.0 License.
 
 ---
 # Context
@@ -134,7 +135,8 @@ It's hard to keep a large network running by itself, unless we hard-code it (whi
 
 * For the PUB/SUB pattern, we use the XPUB/XSUB intermediary. PUB(s) connect to a proxy via its XSUB socket, and this proxy send the messages to the SUB(s) using its XPUB socket.
 * For the REQ/REP, we can add flexibility to the network by using a broker with the DEALER/ROUTER sockets. REQ(s) connect to the broker through the ROUTER socket, which sends the messages to the REP(s) through the DEALER socket. DEALER and ROUTER are non-blocking.
-    * It turns out that the common broker with a ROUTER and DEALER sockets is so useful that it's included in ZMQ as a stand-alone function: `zmq_proxy(frontend, backend, capture)`, where `frontend` is the socket facing clients, `backend` is the socket facing services and `capture` is an optional socket to capture the data sent. In practice, you should usually stick to ROUTER/DEALER, XSUB/XPUB and PULL/PUSH for the `frontend` and `backend` sockets.
+
+It turns out that the common broker with a ROUTER and DEALER sockets is so useful that it's included in ZMQ as a stand-alone function: `zmq_proxy(frontend, backend, capture)`, where `frontend` is the socket facing clients, `backend` is the socket facing services and `capture` is an optional socket to capture the data sent. In practice, you should usually stick to ROUTER/DEALER, XSUB/XPUB and PULL/PUSH for the `frontend` and `backend` sockets. This is implemented in `exercises/msgqueue.c` if you wanna take a gander.
 
 ### Transport Bridging
 A bridge is a small application that speaks one protocol at one socket and converts to/from a second protocol at another. An interpreter, if you like. A bridge can be built, for example, to communicate PUBs based on ZMQ to SUBs based on another type of network, while the bridge connects to an XSUB and an XPUB sockets.
@@ -167,8 +169,20 @@ There are two main exceptional conditions you may want to handle as nonfatal:
 
 **IMPORTANT NOTE**: In C/C++, asserts can be removed entirely in optimized code, so don't make the mistake of wrapping the whole ZMQ call in an `assert()` (basically what I did in `hs_client.c` and `hs_server.c`). It looks neat, then the optimizer removes all the asserts and the calls you want to make, and your application breaks in impressive ways.
 
+### Shutting Down a Process Cleanly
+In many applications, the only way to actually stop a process is by hitting `Ctrl-C`. In practice, we want a way to shut down a process cleanly. To do this, you need to find the node in the network that really knows when all processing is done, and send a `kill` message to all the nodes that don't shut down by themselves.
+
+### Handling Interrupt Signals
+Realistic applications need to shut down cleanly when interrupted with `Ctrl-C` or a signal such as `SIGTERM`. You can do this by catching these signals and exiting gracefully, instead of leaving the lights on when leaving the room. `examples/interrupt.c` shows an elegant and simple way to this.
+
+### Detecting Memory Leaks
+Don't be a doofus. Use [**Valgrind**](http://valgrind.org/) when debugging. Build with `-g` and `-DDEBUG` for additional debugging information, and run your program with `valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.supp <YOURPROGRAM>`. `valgrind.supp` is located in the `examples` directory.
+
 ---
 # Additional Information
+### The Standard ZMQ Answer
+The standard ZMQ answer to problems is to create a new socket flow for each type of problem you need to solve. Attempting to reuse already created sockets for new purposes leads to bloated and unwieldy code.
+
 ### Cleaning up after the Job
 Just as you want to avoid a memory leak or a messy murder scene, it is **very** important to clean up after finishing the job; mainly for security concerns. The ZMQ objects you need to worry about are messages, sockets and contexts:
 
