@@ -121,6 +121,52 @@ Some other stuffs are worth knowing about messages:
 * If you want to send a file, it's useful to break it up into pieces first, sending each piece as a separate single-part message.
 * When finished with a message, you **always** need to call `zmq_msg_close()`.
 
+**The quick and dirty way to work with ZMQ messages**: Use the `s_recv(socket)` and `s_send(socket)` methods from `exercises/zhelper.h`. They're lifesavers.
+
+### Multipart Messages:
+* Each part of a multipart message is sent using `zmq_msg_send(socket, &message, ZMQ_SNDMORE)`, while the last message is sent using `zmq_msg_send(socket, &message, 0)`
+* Multipart messages are received in a loop, using `zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &moresize)` to know if there is more content to receive or not. When `more = 0` you have received the whole message.
+* You will receive all parts of a message, or none at all.
+* The only way to close a partially sent message is to close the socket (of course, this isn't advised).
+
+### The Dynamic Discovery Problem
+It's hard to keep a large network running by itself, unless we hard-code it (which introduces fragility anyway). The common way to fix this in ZMQ is to use an **intermediary**, that is, a static point in the network to which all other nodes connect. The different messaging patterns require different intermediaries:
+
+* For the PUB/SUB pattern, we use the XPUB/XSUB intermediary. PUB(s) connect to a proxy via its XSUB socket, and this proxy send the messages to the SUB(s) using its XPUB socket.
+* For the REQ/REP, we can add flexibility to the network by using a broker with the DEALER/ROUTER sockets. REQ(s) connect to the broker through the ROUTER socket, which sends the messages to the REP(s) through the DEALER socket. DEALER and ROUTER are non-blocking.
+    * It turns out that the common broker with a ROUTER and DEALER sockets is so useful that it's included in ZMQ as a stand-alone function: `zmq_proxy(frontend, backend, capture)`, where `frontend` is the socket facing clients, `backend` is the socket facing services and `capture` is an optional socket to capture the data sent. In practice, you should usually stick to ROUTER/DEALER, XSUB/XPUB and PULL/PUSH for the `frontend` and `backend` sockets.
+
+### Transport Bridging
+A bridge is a small application that speaks one protocol at one socket and converts to/from a second protocol at another. An interpreter, if you like. A bridge can be built, for example, to communicate PUBs based on ZMQ to SUBs based on another type of network, while the bridge connects to an XSUB and an XPUB sockets.
+
+### Handling Errors and ETERM
+The ZMQ standard is to be as vulnerable as possible to internal errors and as robust as possible against external attacks and errors. In C/C++, assertions stop the application immediately with an error. If ZMQ detects an external fault, it returns an error to the calling code.
+
+**Real code should do error handling on every single ZMQ call.** Here are the simple rules:
+* Methods that create objects return NULL if they fail.
+* Methods that process data may return the number of bytes processed, or -1 on an error or failure.
+* Other methods return 0 on success and -1 on an error or failure.
+* The error code is provided in `errno` or in `zmq_errno()`.
+* Descriptive error text for logging is provided by `zmq_strerror()`.
+
+An example on handling ZMQ errors:
+
+    void *context = zmq_ctx_new ();
+    assert (context);
+    void *socket = zmq_socket (context, ZMQ_REP);
+    assert (socket);
+    int rc = zmq_bind (socket, "tcp://*:5555");
+    if (rc != 0) {
+        printf ("#: bind failed: %s\n", strerror (errno));
+        return -1;
+    }
+
+There are two main exceptional conditions you may want to handle as nonfatal:
+* When a thread calls `zmq_msg_recv()` with the `ZMQ_DONTWAIT` option and there is no waiting data, ZMQ will return -1 and set `errno` to `EAGAIN`.
+* When a thread calls `zmq_ctx_destroy()` and other threads are doing blocking work, the `zmq_ctx_destroy()` call closes the context and all blocking calls exit with -1 and `errno` is set to `ETERM`.
+
+**IMPORTANT NOTE**: In C/C++, asserts can be removed entirely in optimized code, so don't make the mistake of wrapping the whole ZMQ call in an `assert()` (basically what I did in `hs_client.c` and `hs_server.c`). It looks neat, then the optimizer removes all the asserts and the calls you want to make, and your application breaks in impressive ways.
+
 ---
 # Additional Information
 ### Cleaning up after the Job
