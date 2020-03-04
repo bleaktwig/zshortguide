@@ -178,6 +178,31 @@ Realistic applications need to shut down cleanly when interrupted with `Ctrl-C` 
 ### Detecting Memory Leaks
 Don't be a doofus. Use [**Valgrind**](http://valgrind.org/) when debugging. Build with `-g` and `-DDEBUG` for additional debugging information, and run your program with `valgrind --tool=memcheck --leak-check=full --suppressions=valgrind.supp <YOURPROGRAM>`. `valgrind.supp` is located in the `examples` directory.
 
+### Multithreading with ZMQ
+To make multithreaded applications we don't need mutexes, locks or any other form of inter-thread communication except messages sent across ZMQ sockets. Writing MT applications in ZMQ requires following simple steps:
+
+* Don't access the same data from multiple threads (shared states are humanity's biggest mistake). The only exception to this is a ZMQ context object, which is thread safe.
+* Create a ZMQ context for your process, and pass all threads that you want to connect via an `inproc` socket.
+* Threads can be treated as separate tasks with their own context, but these cannot communicate over `inproc`.
+* Threads must not share ZMQ sockets. This demands semaphores, locks, or mutexes, and these will make your application slow and fragile.
+* Do not use or close sockets except in the thread that created them.
+
+ZMQ uses native OS threads rather than virtual threads.
+
+If you need to communicate between threads you only need to use ZMQ threads, not any weird MT design pattern. The PAIR socket is a special socket type used to communicate between threads, which has the advantage that it provides really low latency, and is exclusive (1-to-1 communication).
+
+### Node Coordination
+Unlike threads, nodes can come and go, and thus communicating them via PAIR sockets is a bad idea since they don't automatically reconnect if the remote node goes away and comes back. Also, we usually have a fixed number of threads but a more variable number of nodes. Synchronization can be achieved in many ways, but a simple-to-implement one is to have a publisher know how many subscribers it expects, for example.
+
+### Pub-Sub Message Envelope
+In the PUB/SUB pattern, you can split the message into two frames: key and data, which allows a subscriber to receive only one type of message from a subscriber (allowing you to create different "topics", all sent by the same publisher). You can also further split the message, into a key-address-data for example.
+
+### High-Water Marks
+For rapidly sent messages, a delay can cause a rapidly filled backlog and thus a rapidly filled memory. ZMQ uses the concept of a High-Water Mark (HWM) to define the capacity of its internal pipe. Messages received after this limit are either dropped (PUB/ROUTER) or blocked (all others). It's worth noting that HWM is set as a limit for message parts, not necessarily whole messages.
+
+### Missing Message Problem Solver
+When losing messages you're supposed to receive, refer to the diagram at [**page 79**](http://zguide.zeromq.org/page:all#toc51).
+
 ---
 # Additional Information
 ### The Standard ZMQ Answer
